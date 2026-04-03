@@ -10,7 +10,7 @@ go get github.com/yourusername/supabase-realtime-go
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.22+
 - A Supabase project ([create one here](https://supabase.com))
 
 ## Quick Start
