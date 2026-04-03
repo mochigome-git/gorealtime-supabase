@@ -1,11 +1,11 @@
-# supabase-realtime-go
+# gorealtime-supabase
 
 A Go client library for subscribing to [Supabase Realtime](https://supabase.com/docs/guides/realtime) WebSocket events and querying your database via the REST API.
 
 ## Installation
 
 ```bash
-go get github.com/yourusername/supabase-realtime-go
+go get github.com/mochigome-git/gorealtime-supabase
 ```
 
 ## Requirements
@@ -22,7 +22,7 @@ import (
     "fmt"
     "log"
 
-    realtime "github.com/yourusername/supabase-realtime-go"
+    realtime "github.com/mochigome-git/gorealtime-supabase"
     "go.uber.org/zap"
 )
 
