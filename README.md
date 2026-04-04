@@ -29,7 +29,17 @@ import (
 func main() {
     logger, _ := zap.NewProduction()
 
-    client := realtime.CreateRealtimeClient("your-project-ref", "your-anon-key", logger)
+    // Direct mode
+    client := realtime.CreateRealtimeClient("your-anon-key", logger, "wrrahsvkabcfrsbzmnlw")
+
+    // Pooler mode
+    client := realtime.CreateRealtimeClient("your-anon-key", logger,
+        "aws-1-ap-southeast-1.pooler.supabase.com", // host
+        "5432",                                      // port
+        "postgres",                                  // database
+        "postgres.wrrahsvkabcfrsbzmnlw",             // user
+        "YOUR-PASSWORD",                             // password
+    )
 
     if err := client.Connect(); err != nil {
         log.Fatal(err)
