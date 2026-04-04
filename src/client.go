@@ -52,32 +52,43 @@ type Client struct {
 }
 
 // CreateRealtimeClient initializes a new Client
-// CreateRealtimeClient supports either projectRef or full Postgres session URL
-func CreateRealtimeClient(connection, apiKey string, logger *zap.Logger) *Client {
+// Supports either projectRef or separate host/port/database/user/password params
+func CreateRealtimeClient(apiKey string, logger *zap.Logger, opts ...string) *Client {
 	var wsUrl, restUrl string
 
-	if strings.HasPrefix(connection, "postgresql://") || strings.HasPrefix(connection, "postgres://") {
-		// Parse full Postgres connection URL to extract host
-		parsed, err := url.Parse(connection)
-		if err != nil {
-			logger.Fatal("Invalid connection URL", zap.String("connection", connection), zap.Error(err))
-		}
-		host := parsed.Hostname() // extracts just the host, no port
-		wsUrl = fmt.Sprintf(
-			"wss://%s/realtime/v1/websocket?apikey=%s&log_level=info&vsn=1.0.0",
-			host, apiKey,
-		)
-		restUrl = fmt.Sprintf("https://%s/rest/v1", host)
-		logger.Info("Using session pooler mode", zap.String("host", host))
-	} else {
-		// Treat as plain projectRef (e.g. "wrrahsvkabcfrsbzmnlw")
-		projectRef := connection
+	switch len(opts) {
+	case 1:
+		// Direct mode: opts[0] = projectRef
+		projectRef := opts[0]
 		wsUrl = fmt.Sprintf(
 			"wss://%s/realtime/v1/websocket?apikey=%s&log_level=info&vsn=1.0.0",
 			projectRef, apiKey,
 		)
 		restUrl = fmt.Sprintf("https://%s/rest/v1", projectRef)
 		logger.Info("Using normal projectRef mode", zap.String("projectRef", projectRef))
+
+	case 5:
+		// Pooler mode: opts[0]=host, opts[1]=port, opts[2]=database, opts[3]=user, opts[4]=password
+		host, port, database, user, password := opts[0], opts[1], opts[2], opts[3], opts[4]
+		parts := strings.SplitN(user, ".", 2)
+		if len(parts) != 2 {
+			logger.Fatal("Expected user format postgres.PROJECT_REF", zap.String("user", user))
+		}
+		projectRef := parts[1]
+		wsUrl = fmt.Sprintf(
+			"wss://%s/realtime/v1/websocket?apikey=%s&user_token=%s&log_level=info&vsn=1.0.0",
+			projectRef, apiKey, url.QueryEscape(password),
+		)
+		restUrl = fmt.Sprintf("https://%s/rest/v1", projectRef)
+		logger.Info("Using session pooler mode",
+			zap.String("host", host),
+			zap.String("port", port),
+			zap.String("database", database),
+			zap.String("user", user),
+		)
+
+	default:
+		logger.Fatal("Invalid arguments: pass projectRef or host,port,database,user,password")
 	}
 
 	return &Client{
