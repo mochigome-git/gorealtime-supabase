@@ -34,10 +34,10 @@ func main() {
 
     // Pooler mode
     client := realtime.CreateRealtimeClient("your-anon-key", logger,
-        "aws-1-ap-southeast-1.pooler.supabase.com", // host
+        "xxx.supabase.com",                          // host
         "5432",                                      // port
         "postgres",                                  // database
-        "postgres.wrrahsvkabcfrsbzmnlw",             // user
+        "postgres.xxx",                              // user
         "YOUR-PASSWORD",                             // password
     )
 
