@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -55,9 +56,13 @@ type Client struct {
 func CreateRealtimeClient(connection, apiKey string, logger *zap.Logger) *Client {
 	var wsUrl, restUrl string
 
-	if dot := strings.Contains(connection, "."); dot {
-		// Treat as pooler host
-		host := connection
+	if strings.HasPrefix(connection, "postgresql://") || strings.HasPrefix(connection, "postgres://") {
+		// Parse full Postgres connection URL to extract host
+		parsed, err := url.Parse(connection)
+		if err != nil {
+			logger.Fatal("Invalid connection URL", zap.String("connection", connection), zap.Error(err))
+		}
+		host := parsed.Hostname() // extracts just the host, no port
 		wsUrl = fmt.Sprintf(
 			"wss://%s/realtime/v1/websocket?apikey=%s&log_level=info&vsn=1.0.0",
 			host, apiKey,
@@ -65,7 +70,7 @@ func CreateRealtimeClient(connection, apiKey string, logger *zap.Logger) *Client
 		restUrl = fmt.Sprintf("https://%s/rest/v1", host)
 		logger.Info("Using session pooler mode", zap.String("host", host))
 	} else {
-		// Treat as direct connection
+		// Treat as plain projectRef (e.g. "wrrahsvkabcfrsbzmnlw")
 		projectRef := connection
 		wsUrl = fmt.Sprintf(
 			"wss://%s/realtime/v1/websocket?apikey=%s&log_level=info&vsn=1.0.0",
