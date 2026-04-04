@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,13 +51,29 @@ type Client struct {
 }
 
 // CreateRealtimeClient initializes a new Client
-func CreateRealtimeClient(projectRef string, apiKey string, logger *zap.Logger) *Client {
-	wsUrl := fmt.Sprintf(
-		"wss://%s.supabase.co/realtime/v1/websocket?apikey=%s&log_level=info&vsn=1.0.0",
-		projectRef, apiKey,
-	)
+// CreateRealtimeClient supports either projectRef or full Postgres session URL
+func CreateRealtimeClient(connection, apiKey string, logger *zap.Logger) *Client {
+	var wsUrl, restUrl string
 
-	restUrl := fmt.Sprintf("https://%s.supabase.co/rest/v1", projectRef)
+	if dot := strings.Contains(connection, "."); dot {
+		// Treat as pooler host
+		host := connection
+		wsUrl = fmt.Sprintf(
+			"wss://%s/realtime/v1/websocket?apikey=%s&log_level=info&vsn=1.0.0",
+			host, apiKey,
+		)
+		restUrl = fmt.Sprintf("https://%s/rest/v1", host)
+		logger.Info("Using session pooler mode", zap.String("host", host))
+	} else {
+		// Treat as direct connection
+		projectRef := connection
+		wsUrl = fmt.Sprintf(
+			"wss://%s/realtime/v1/websocket?apikey=%s&log_level=info&vsn=1.0.0",
+			projectRef, apiKey,
+		)
+		restUrl = fmt.Sprintf("https://%s/rest/v1", projectRef)
+		logger.Info("Using normal projectRef mode", zap.String("projectRef", projectRef))
+	}
 
 	return &Client{
 		Url:               wsUrl,
