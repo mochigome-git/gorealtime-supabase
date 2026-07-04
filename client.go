@@ -76,10 +76,10 @@ func CreateRealtimeClient(apiKey string, logger *zap.Logger, opts ...string) *Cl
 		}
 		projectRef := parts[1]
 		wsUrl = fmt.Sprintf(
-			"wss://%s/realtime/v1/websocket?apikey=%s&user_token=%s&log_level=info&vsn=1.0.0",
+			"wss://%s.supabase.co/realtime/v1/websocket?apikey=%s&user_token=%s&log_level=info&vsn=1.0.0",
 			projectRef, apiKey, url.QueryEscape(password),
 		)
-		restUrl = fmt.Sprintf("https://%s/rest/v1", projectRef)
+		restUrl = fmt.Sprintf("https://%s.supabase.co/rest/v1", projectRef)
 		logger.Info("Using session pooler mode",
 			zap.String("host", host),
 			zap.String("port", port),
