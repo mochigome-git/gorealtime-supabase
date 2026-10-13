@@ -2,99 +2,55 @@ package supabase_realtime
 
 import (
 	"context"
-	"errors"
-	"math"
+	"fmt"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"go.uber.org/zap"
 )
 
-// startHeartbeats launches a heartbeat goroutine
-func (client *Client) startHeartbeats() {
-	client.mu.Lock()
-	if client.heartbeatCancel != nil {
-		client.logger.Info("Stop heartbeat...")
-		client.heartbeatCancel()
-	}
+// heartbeatLoop sends a heartbeat every heartbeatInterval for as long as conn
+// is the active connection. It hands the connection to connectionLost (which
+// reconnects) when a heartbeat cannot be written, or when the server has sent
+// nothing back for two intervals: a healthy server replies to every heartbeat,
+// so silence means a half-open link (e.g. dropped by a NAT or load balancer)
+// where writes still succeed but nothing is delivered.
+func (client *Client) heartbeatLoop(ctx context.Context, conn *websocket.Conn) {
+	ticker := time.NewTicker(client.heartbeatInterval)
+	defer ticker.Stop()
 
-	ctx := client.ctx
-	if ctx == nil {
-		client.mu.Unlock()
-		return
-	}
-
-	hbCtx, cancel := context.WithCancel(ctx)
-	client.heartbeatCancel = cancel
-	client.mu.Unlock()
-
-	go client.heartbeatLoop(hbCtx)
-}
-
-// heartbeatLoop periodically sends heartbeat messages
-func (client *Client) heartbeatLoop(ctx context.Context) {
-	retryInterval := client.heartbeatInterval
+	silenceLimit := 2*client.heartbeatInterval + client.heartbeatDuration
 
 	for {
-		if ctx.Err() != nil {
-			return
-		}
-
-		err := client.sendHeartbeat()
-		if err != nil {
-			client.logger.Error("Heartbeat failed", zap.Error(err))
-			_ = client.Disconnect()
-
-			// FIX #4: use the heartbeat loop's own context (derived from
-			// client.ctx) instead of context.Background(). This means
-			// reconnect respects shutdown — if Disconnect() was called
-			// intentionally, ctx.Err() will be non-nil and reconnect
-			// exits immediately instead of running forever.
-			client.mu.Lock()
-			reconnectCtx := ctx // already derived from client.ctx
-			client.mu.Unlock()
-
-			time.Sleep(retryInterval)
-
-			// Check context again after sleep — don't reconnect if we
-			// shut down while waiting.
-			if reconnectCtx.Err() != nil {
-				client.logger.Info("Heartbeat loop: context cancelled during retry sleep, skipping reconnect")
-				return
-			}
-
-			client.reconnect(reconnectCtx)
-
-			retryInterval = time.Duration(math.Min(float64(retryInterval*2), float64(30*time.Second)))
-			continue
-		}
-
-		retryInterval = client.heartbeatInterval
-
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(client.heartbeatInterval):
+		case <-ticker.C:
+		}
+
+		if since := time.Since(time.Unix(0, client.lastRecv.Load())); since > silenceLimit {
+			client.connectionLost(conn, "no response from server",
+				fmt.Errorf("nothing received for %s", since.Round(time.Millisecond)))
+			return
+		}
+
+		if err := client.sendHeartbeat(ctx, conn); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			client.connectionLost(conn, "heartbeat failed", err)
+			return
 		}
 	}
 }
 
-// sendHeartbeat sends a heartbeat message to the server
-func (client *Client) sendHeartbeat() error {
-	client.mu.Lock()
-	conn := client.conn
-	ctx := client.ctx
-	client.mu.Unlock()
-
-	if conn == nil {
-		return errors.New("no active connection")
-	}
-
+// sendHeartbeat writes one heartbeat message to conn.
+func (client *Client) sendHeartbeat(ctx context.Context, conn *websocket.Conn) error {
 	heartbeat := HearbeatMsg{
 		TemplateMsg: TemplateMsg{
 			Event: HEARTBEAT_EVENT,
 			Topic: "phoenix",
-			Ref:   "",
+			Ref:   client.nextRef(),
 		},
 		Payload: struct{}{},
 	}

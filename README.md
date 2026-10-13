@@ -93,8 +93,17 @@ err := client.Disconnect()
 The client automatically handles:
 
 - Heartbeats every 20 seconds
-- Reconnection on connection loss with exponential backoff (up to 30s)
-- Re-subscribing to all topics after a reconnect
+- Reconnection on connection loss with exponential backoff (up to 30s). A read
+  error, a failed heartbeat, or no reply from the server for two heartbeat
+  intervals (a silently dropped connection) all trigger a reconnect.
+- Re-subscribing to all topics after a reconnect, and re-joining a channel the
+  server closes with `phx_error` / `phx_close`
+- Logging rejected subscriptions (`Realtime subscription rejected`,
+  `Realtime subscription error`) instead of failing silently
+
+Only `Disconnect()` stops reconnecting. Calling `Connect()` again afterwards
+restarts the client and re-joins its existing subscriptions. Errors that
+contain the WebSocket URL are logged with the API key and user token redacted.
 
 ---
 

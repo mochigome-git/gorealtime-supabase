@@ -3,6 +3,8 @@ package supabase_realtime
 // Channel Events
 const JOIN_EVENT = "phx_join"
 const REPLY_EVENT = "phx_reply"
+const ERROR_EVENT = "phx_error"
+const CLOSE_EVENT = "phx_close"
 
 // DB Subscription Events
 const POSTGRES_CHANGE_EVENT = "postgres_changes"
